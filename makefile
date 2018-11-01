@@ -1,33 +1,25 @@
-F90FLAGS = -fbounds-check -fbacktrace -g
-SRC = src
-BIN = .bin
-
-# where to locate the object code
-#
+# Hidden directory to keep all compiled files
 OBJ= .obj
 
 # Compile flags
 FC=gfortran 
 LD=gfortran -g
-OPT= -c -O3 -Wall -pedantic
 DBG= -c -g 
+F90FLAGS = -fbounds-check -fbacktrace -g
 
 SRC= src
-EXECUTABLE= test_GMRES.x
+EXECUTABLE= helmholtz_wave_fd.x
 
-#
-# object files
-#
-_OBJECTS = gmres_module.o conjugate_gradient.o test_GMRES.o
+# Define object files
+# _OBJECTS = gmres_module.o conjugate_gradient.o test_GMRES.o helmholtz_parameters.o helmholtz_wave_fd.o
+_OBJECTS = helmholtz_parameters.o helmholtz_wave_fd.o
 OBJECTS = $(patsubst %,$(OBJ)/%,$(_OBJECTS))
 
-#
-# executable 
-#
+# Rules to build executable 
 $(EXECUTABLE) : $(OBJECTS)
 	$(LD) -o $(EXECUTABLE) $(OBJECTS)
 $(OBJ)/%.o : $(SRC)/%.f90 | $(OBJ)
-	$(FC) $(F90FLAGS) -c -o $@ $< -J$(OBJ)/
+	$(LD) $(F90FLAGS) -c -o $@ $< -J$(OBJ)/
 $(OBJ) :
 	mkdir -p $(OBJ)
 
@@ -35,5 +27,5 @@ $(OBJ) :
 
 # clean up
 clean :
-	rm -f $(EXECUTABLE) 
+	rm -f *.x 
 	rm -rf $(OBJ)

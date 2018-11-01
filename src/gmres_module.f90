@@ -50,6 +50,11 @@ module gmres_module
 
   !! normalize the residual
   beta = SQRT(DOT_PRODUCT(res,res))
+  if(beta .lt. tol) then
+    !! We have stumbled on the solution
+    GOTO 111
+  end if  
+
   res = res/beta
   V(:,1) = res
 
@@ -80,6 +85,7 @@ module gmres_module
     h(j+1,j) = SQRT(DOT_PRODUCT(tmp,tmp))
     tmp = tmp/h(j+1,j)
     V(:,j+1) = tmp
+
 
     !! apply all previous Givens rotations
     do i = 1,j-1
@@ -135,6 +141,7 @@ module gmres_module
   end if
 
   !! deallocate all working arrays
+  111 CONTINUE
   DEALLOCATE(s_vec)
   DEALLOCATE(c_vec)
   DEALLOCATE(h_vec)
@@ -188,6 +195,10 @@ module gmres_module
 
   !! normalize the residual
   beta = SQRT(DOT_PRODUCT(res,res))
+  if(beta .lt. tol) then 
+    !! we have stumbled upon the solution
+    GOTO 111
+  end if
   res = res/beta
   V(:,1) = res
 
@@ -273,6 +284,7 @@ module gmres_module
   end if
 
   !! deallocate all working arrays
+  111 CONTINUE
   DEALLOCATE(s_vec)
   DEALLOCATE(c_vec)
   DEALLOCATE(h_vec)
