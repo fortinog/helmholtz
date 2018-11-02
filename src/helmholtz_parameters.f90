@@ -32,7 +32,7 @@ module helmholtz_parameters
   !! here we choose a constant
   ! u = 0.d0
   do i =1,N
-   u(i) = 1.d0 + COS(1.5d0*x(i)*PI)
+   u(i) = COS(0.5d0*x(i)*PI)
   end do 
 
  end subroutine initial_condition
@@ -156,20 +156,30 @@ module helmholtz_parameters
    !! compute laplacian at left boundary
    i = 2
    lap(1) = SUM(c(i:i+1))*u(i+1) - SUM(c(i-1:i+1))*u(i)
-   lap(1) = lap(1) - c(i)*u(i) + SUM(c(i-1:i))*u(i-1)
+   lap(1) = lap(1) - c(i)*u(i)
    lap(1) = denom*lap(1)
+
+   !! Account for Dirichlet boundary conditions
+   lap(i) = SUM(c(i:i+1))*u(i+1) - SUM(c(i-1:i+1))*u(i)
+   lap(i) = lap(i) - c(i)*u(i)
+   lap(i) = denom*lap(i)
 
    !! compute laplacian on nodes with support 
    !! contained in the interior of the domain
-   do i=2,N-1
+   do i=3,N-2
     lap(i) = SUM(c(i:i+1))*u(i+1) - SUM(c(i-1:i+1))*u(i)
     lap(i) = lap(i) - c(i)*u(i) + SUM(c(i-1:i))*u(i-1)
     lap(i) = denom*lap(i)
    end do 
 
-   !! compute laplacian at right boundary
    i = N-1
-   lap(N) = SUM(c(i:i+1))*u(i+1) - SUM(c(i-1:i+1))*u(i)
+   !! Account for Dirichlet boundary conditions
+   lap(i) = -1.d0*SUM(c(i-1:i+1))*u(i)
+   lap(i) = lap(i) - c(i)*u(i) + SUM(c(i-1:i))*u(i-1)
+   lap(i) = denom*lap(i)
+
+   !! compute laplacian at right boundary
+   lap(N) = -1.d0*SUM(c(i-1:i+1))*u(i)
    lap(N) = lap(N) - c(i)*u(i) + SUM(c(i-1:i))*u(i-1)
    lap(N) = denom*lap(N)
 

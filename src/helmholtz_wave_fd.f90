@@ -2,7 +2,7 @@ program helmholtz_wave_fd
  use helmholtz_parameters
  implicit none
 
- INTEGER,        PARAMETER :: N = 50
+ INTEGER,        PARAMETER :: N = 100
  REAL(KIND=dpp), PARAMETER :: Tend = 2.0d0/omega
  
  REAL(KIND=dpp)     :: x(N), u(N), rho(N), ut(N), utt(N)
