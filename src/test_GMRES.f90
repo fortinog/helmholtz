@@ -41,8 +41,9 @@ program test_GMRES
  ! y = 0.d0
  ! write(*,*) b 
  ! stop 829
- CALL gmres(A,b,tol,y)
- ! CALL gmres_func(b,tol,x)
+ ! CALL gmres(A,b,tol,y)
+ CALL gmres_func(b,tol,x)
+ 
 
 
  !! post output

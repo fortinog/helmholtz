@@ -2,10 +2,22 @@ module helmholtz_parameters
  
  implicit none
  
- INTEGER,        PARAMETER :: dpp   = KIND(1.d0)
- REAL(KIND=dpp), PARAMETER :: OMEGA = 10.d0  !wavenumber
- REAL(KIND=dpp), PARAMETER :: PI    = ACOS(-1.d0)
- REAL(KIND=dpp), PARAMETER :: SIGMA = 37.d0
+ !! Define parameters of the boundary (i.e. geometry
+ !! and discretization related values)
+
+ INTEGER,          PARAMETER :: dpp   = KIND(1.d0)
+ INTEGER,          PARAMETER :: N     = 500
+ INTEGER,          PARAMETER :: MAXIT = 1000
+ REAL(KIND=dpp),   PARAMETER :: PI    = ACOS(-1.d0)
+ REAL(KIND=dpp),   PARAMETER :: OMEGA = 8d0 !!wavenumber
+ REAL(KIND=dpp),   PARAMETER :: Tend  = 2.0d0*PI/OMEGA
+ REAL(KIND=dpp),   PARAMETER :: SIGMA = 37.d0
+ REAL(KIND=dpp),   PARAMETER :: A     = -1.d0 !!left endpt
+ REAL(KIND=dpp),   PARAMETER :: B     = 1.d0  !!right endpt
+ REAL(KIND=dpp),   PARAMETER :: CFL   = 0.4d0
+ REAL(KIND=dpp),   PARAMETER :: TOL   = 1.0d-14
+ CHARACTER(len=2), PARAMETER :: BC    = 'DD'
+
  contains
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -72,13 +84,14 @@ module helmholtz_parameters
 
   INTEGER :: i
   !! here we choose a constant
-  ! u = 0.d0
-  do i =1,N
-   ! u(i) = COS(0.5d0*x(i)*PI)
-   ! u(i) = EXP(-SIGMA*x(i)**2.d0)
-   u(i) = COS(0.25d0*x(i)*PI) - SIN(0.25d0*x(i)*PI)
-   ut(i) = -1.d0*u(i)*PI*0.25d0
-  end do 
+  u  = 0.d0
+  ut = 0.d0
+  ! do i =1,N
+  !  ! u(i) = COS(0.5d0*x(i)*PI)
+  !  ! u(i) = EXP(-1.d0*SIGMA*x(i)**2.d0)
+  !  ! u(i) = COS(0.25d0*x(i)*PI) - SIN(0.25d0*x(i)*PI)
+  !  ! ut(i) = -1.d0*u(i)*PI*0.25d0
+  ! end do 
 
  end subroutine initial_condition
 
@@ -147,10 +160,10 @@ module helmholtz_parameters
   !! here we choose a constant
   f = 0.d0
 
-  ! do i = 1,N
-  !  coeff = 4.d0*(SIGMA*x(i))**2.d0 + OMEGA**2.d0 - 2.d0*SIGMA
-  !  f(i) = coeff*EXP(-SIGMA*x(i)**2.d0)
-  ! end do
+  do i = 1,N
+   coeff = 4.d0*(SIGMA*x(i))**2.d0 + OMEGA**2.d0 - 2.d0*SIGMA
+   f(i) = coeff*EXP(-SIGMA*x(i)**2.d0)
+  end do
 
  end subroutine spatial_forcing
 
@@ -159,6 +172,7 @@ module helmholtz_parameters
  !! returns the temporal part of the forcing at that point
  !! Inputs:
  !! 	- x       : spatial grid
+ !!     - t       : the current time
  !!     - N       : number of grid points
  !! Outputs:
  !!		- g       : forcing term
@@ -173,8 +187,7 @@ module helmholtz_parameters
   REAL(KIND=dpp), INTENT(INOUT) :: g
 
   !! here we choose a constant
-  ! g = COS(omega*t)
-  g = 1.d0
+  g = COS(OMEGA*t)
  end subroutine temporal_forcing
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -218,6 +231,7 @@ module helmholtz_parameters
  !! and enforces the desired boundary conditions (this
  !! is to be modified if different conditions are desired).
  !! Inputs:
+ !!     - x       : spatial nodes
  !!     - dx      : spatial step size
  !!     - N       : number of interior grid points
  !!     - BC      : 'D' for Dirichlet, 'N' for Neumann BCs

@@ -8,11 +8,14 @@ DBG= -c -g
 F90FLAGS = -fbounds-check -fbacktrace -g
 
 SRC= src
-EXECUTABLE= helmholtz_wave_fd.x
+# EXECUTABLE= helmholtz_wave_fd.x
+EXECUTABLE= test_qrdelete.x
 
 # Define object files
 # _OBJECTS = gmres_module.o conjugate_gradient.o test_GMRES.o helmholtz_parameters.o helmholtz_wave_fd.o
-_OBJECTS = helmholtz_parameters.o helmholtz_wave_fd.o
+_OBJECTS = anderson_acceleration.o test_qrdelete.o
+
+# _OBJECTS = helmholtz_parameters.o helmholtz_wave_fd.o anderson_acceleration.o
 OBJECTS = $(patsubst %,$(OBJ)/%,$(_OBJECTS))
 
 # Rules to build executable 
