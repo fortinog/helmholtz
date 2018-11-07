@@ -3,13 +3,13 @@ program test_qrdelete
  use anderson_acceleration
  implicit none 
 
- INTEGER, PARAMETER :: N = 20
+ INTEGER, PARAMETER :: N = 10
  INTEGER        :: i, j, m, maxiter
  REAL(KIND=dpp) :: tol, x(N)
  
  m = 10
  tol = 1d-15
- maxiter = 30
+ maxiter = 20
 
  x = 1.d0
 

@@ -74,52 +74,51 @@ contains
      Gmat(:,m) = G - G_old
     end if
     num_res = num_res + 1 
-    !! this if statement not where it needs to be
-   end if
-   G_old = G 
-   F_old = F
+    G_old = G 
+    F_old = F
 
-   if(num_res .eq. 1) then 
-    !! form initial QR decomposition
-    R(1,1) = SQRT(DOT_PRODUCT(df,df))
-    Q(:,1) = df/R(1,1)
-   else 
-    !! Update QR decomposition
-    if(num_res .gt. m) then 
-     !! Update Q,R. Here we don't delete, we simply
-     !! shift columns up one and allow the last column to
-     !! be deleted.
-     CALL QRdelete(m,N,Q,R) 
-     num_res = num_res - 1
+    if(num_res .eq. 1) then 
+     !! form initial QR decomposition
+     R(1,1) = SQRT(DOT_PRODUCT(df,df))
+     Q(:,1) = df/R(1,1)
+    else 
+     !! Update QR decomposition
+     if(num_res .gt. m) then 
+      !! Update Q,R. Here we don't delete, we simply
+      !! shift columns up one and allow the last column to
+      !! be deleted.
+      CALL QRdelete(m,N,Q,R) 
+      num_res = num_res - 1
+     end if
+
+     !! Now we update the QR decomposition to incorporate
+     !! the new column
+     do j = 1, num_res-1
+      R(j,num_res) = DOT_PRODUCT(Q(:,j),df)
+      df = df - R(j,num_res)*Q(:,j)
+     end do
+     R(num_res,num_res) = SQRT(DOT_PRODUCT(df,df))
+     Q(:,num_res) = df/R(num_res,num_res)
     end if
 
-    !! Now we update the QR decomposition to incorporate
-    !! the new column
-    do j = 1, num_res-1
-     R(j,num_res) = DOT_PRODUCT(Q(:,j),df)
-     df = df - R(j,num_res)*Q(:,j)
-    end do
-    R(num_res,num_res) = SQRT(DOT_PRODUCT(df,df))
-    Q(:,num_res) = df/R(num_res,num_res)
-   end if
-
-   !! Now we need to solve the least-squares problem
-   gamma_vec = 0.d0
-   do j=1,num_res
-    gamma_vec = gamma_vec + DOT_PRODUCT(Q(:,j),F)
-   end do 
-
-   !! Do a backsolve of R to get gamma_vec
-   gamma_vec(num_res) = gamma_vec(num_res)/R(num_res,num_res)
-   do i=num_res-1,1,-1
-    do j=num_res,i+1,-1
-     gamma_vec(i) = gamma_vec(i) - R(i,j)*gamma_vec(j)
+    !! Now we need to solve the least-squares problem
+    gamma_vec = 0.d0
+    do j=1,num_res
+     gamma_vec(j) = gamma_vec(j) + DOT_PRODUCT(Q(:,j),F)
     end do 
-    gamma_vec(i) = gamma_vec(i)/R(i,i)
-   end do 
 
-   !! update approximate solution
-   x = G - MATMUL(Gmat,gamma_vec)
+    !! Do a backsolve of R to get gamma_vec
+    gamma_vec(num_res) = gamma_vec(num_res)/R(num_res,num_res)
+    do i=num_res-1,1,-1
+     do j=num_res,i+1,-1
+      gamma_vec(i) = gamma_vec(i) - R(i,j)*gamma_vec(j)
+     end do 
+     gamma_vec(i) = gamma_vec(i)/R(i,i)
+    end do 
+
+    !! update approximate solution
+    x = G - MATMUL(Gmat,gamma_vec)
+   end if 
   end do 
 
   !! Deallocate working arrays
@@ -157,10 +156,6 @@ contains
   REAL(KIND=dpp), INTENT(INOUT) :: out(:)
 
   INTEGER :: i
-
-  ! do i = 1,N 
-  !  out(i) = x(i)**2.d0
-  ! end do 
 
   !! Solve Poissons eq.
   out(1) = -2.d0*x(1) + x(2)
