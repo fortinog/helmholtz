@@ -7,9 +7,9 @@ module helmholtz_parameters
 
  INTEGER,          PARAMETER :: dpp   = KIND(1.d0)
  INTEGER,          PARAMETER :: N     = 500
- INTEGER,          PARAMETER :: MAXIT = 1000
+ INTEGER,          PARAMETER :: MAXIT = 4000
  REAL(KIND=dpp),   PARAMETER :: PI    = ACOS(-1.d0)
- REAL(KIND=dpp),   PARAMETER :: OMEGA = 8d0 !!wavenumber
+ REAL(KIND=dpp),   PARAMETER :: OMEGA = 3d0 !!wavenumber
  REAL(KIND=dpp),   PARAMETER :: Tend  = 2.0d0*PI/OMEGA
  REAL(KIND=dpp),   PARAMETER :: SIGMA = 37.d0
  REAL(KIND=dpp),   PARAMETER :: A     = -1.d0 !!left endpt
@@ -161,8 +161,9 @@ module helmholtz_parameters
   f = 0.d0
 
   do i = 1,N
-   coeff = 4.d0*(SIGMA*x(i))**2.d0 + OMEGA**2.d0 - 2.d0*SIGMA
-   f(i) = coeff*EXP(-SIGMA*x(i)**2.d0)
+   ! coeff = 4.d0*(SIGMA*x(i))**2.d0 + OMEGA**2.d0 - 2.d0*SIGMA
+   ! f(i) = coeff*EXP(-SIGMA*(x(i)**2.d0))
+   f(i) = (OMEGA**2.d0 - (0.5d0*PI)**2.d0)*COS(0.5d0*PI*x(i))
   end do
 
  end subroutine spatial_forcing
@@ -274,5 +275,90 @@ module helmholtz_parameters
   		u(N+2) = u(N) + 2.d0*dx*val
   	END SELECT
  end subroutine enforce_bcs
+
+ subroutine evolve_and_project(N,dx,end_time,freq,c,f,rho,x,v)
+  
+  implicit none
+
+  INTEGER,        INTENT(IN)    :: N
+  REAL(KIND=dpp), INTENT(IN)    :: dx
+  REAL(KIND=dpp), INTENT(IN)    :: end_time
+  REAL(KIND=dpp), INTENT(IN)    :: freq
+  REAL(KIND=dpp), INTENT(IN)    :: c(:)
+  REAL(KIND=dpp), INTENT(IN)    :: f(:)
+  REAL(KIND=dpp), INTENT(IN)    :: rho(:)
+  REAL(KIND=dpp), INTENT(IN)    :: x(:)
+  REAL(KIND=dpp), INTENT(INOUT) :: v(:)
+
+  REAL(KIND=dpp) :: t, g, dt, dt2
+  INTEGER        :: i, j, nsteps
+
+  REAL(KIND=dpp), ALLOCATABLE :: utt(:), up(:), u(:), un(:)
+
+  t      = 0.d0
+  dt     = CFL*dx
+  nsteps = floor(end_time/dt) + 1
+  dt     = end_time/dble(nsteps)
+  dt2    = dt**2.d0
+
+  !! Allocate working arrays
+  ALLOCATE(u(N+2),utt(N+2),up(N+2),un(N+2))
+
+  !! Calculate RHS of equation at t=0
+  CALL compute_laplacian(v,c,dx,N,utt)
+
+  !! Calculate u_{tt} at t=0 
+  CALL temporal_forcing(x,t,N+2,g)
+  do i = 1,N
+   utt(i) = (utt(i) - f(i)*g)/rho(i)
+  end do
+
+  !! Via a Taylor expansion, we note that 
+  !! u(-dt) = v - dt*ut + 0.5*dt^2*u_{tt}
+  !! FMG: We may remove the dt*ut term 
+  !! for Helmholtz solve
+  ! up = v + 0.5d0*utt*dt2 - dt*ut
+  up = v + 0.5d0*utt*dt2
+  u  = v
+
+  !! March forward in time. Here we use 
+  !! a central difference in time 
+  do i = 1,nsteps
+
+   !! Solution at next time level
+   un = 2.0d0*u - up + utt*dt2
+   t = t + dt
+
+   !! compute quantities at next time level
+   CALL temporal_forcing(x,t,N+2,g)
+   CALL enforce_bcs(x,dx,N,BC,t,un)
+   CALL compute_laplacian(un,c,dx,N,utt)
+
+   !! calculate u_{tt} at current time
+   do j = 1,N
+    utt(j) = (utt(j) - f(j)*g)/rho(j)
+   end do
+
+   !! overwrite solutions
+   up = u
+   u  = un
+
+   if(i .eq. 1) then 
+    v = 0.375d0*dt*v
+    v = v + dt*(COS(freq*(t))-0.25d0)*u
+   elseif(i .lt. nsteps) then  
+    v = v + dt*(COS(freq*(t))-0.25d0)*u
+   end if
+
+  end do
+  v = v + 0.5d0*dt*(COS(freq*t)-0.25d0)*u
+  v = 2.d0*v/end_time
+
+  !! Deallocate working arrays
+  DEALLOCATE(un)
+  DEALLOCATE(u)
+  DEALLOCATE(up)
+  DEALLOCATE(utt)
+ end subroutine evolve_and_project
 
 end module helmholtz_parameters

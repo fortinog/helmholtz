@@ -42,8 +42,8 @@ contains
   Q       = 0.d0
   R       = 0.d0
   num_res = 0   !! number of residuals stored
-  F_old = 0.d0
-  G_old = 0.d0
+  F_old   = 0.d0
+  G_old   = 0.d0
 
   do k=0,maxiter
    CALL rhs_eval(x,N,G)
