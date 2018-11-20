@@ -6,16 +6,16 @@ module helmholtz_parameters
  !! and discretization related values)
 
  INTEGER,          PARAMETER :: dpp   = KIND(1.d0)
- INTEGER,          PARAMETER :: N     = 500
- INTEGER,          PARAMETER :: MAXIT = 4000
+ INTEGER,          PARAMETER :: N     = 130000
+ INTEGER,          PARAMETER :: MAXIT = 120
  REAL(KIND=dpp),   PARAMETER :: PI    = ACOS(-1.d0)
- REAL(KIND=dpp),   PARAMETER :: OMEGA = 3d0 !!wavenumber
+ REAL(KIND=dpp),   PARAMETER :: OMEGA = 62777.3d0 !!wavenumber
  REAL(KIND=dpp),   PARAMETER :: Tend  = 2.0d0*PI/OMEGA
  REAL(KIND=dpp),   PARAMETER :: SIGMA = 37.d0
  REAL(KIND=dpp),   PARAMETER :: A     = -1.d0 !!left endpt
  REAL(KIND=dpp),   PARAMETER :: B     = 1.d0  !!right endpt
- REAL(KIND=dpp),   PARAMETER :: CFL   = 0.4d0
- REAL(KIND=dpp),   PARAMETER :: TOL   = 1.0d-14
+ REAL(KIND=dpp),   PARAMETER :: CFL   = 0.1d0
+ REAL(KIND=dpp),   PARAMETER :: TOL   = 1.0d-15
  CHARACTER(len=2), PARAMETER :: BC    = 'DD'
 
  contains
@@ -164,6 +164,7 @@ module helmholtz_parameters
    ! coeff = 4.d0*(SIGMA*x(i))**2.d0 + OMEGA**2.d0 - 2.d0*SIGMA
    ! f(i) = coeff*EXP(-SIGMA*(x(i)**2.d0))
    f(i) = (OMEGA**2.d0 - (0.5d0*PI)**2.d0)*COS(0.5d0*PI*x(i))
+   ! f(i) = (x(i)**2.d0 - 1.d0)*OMEGA**2.d0 + 2.d0
   end do
 
  end subroutine spatial_forcing
@@ -178,17 +179,23 @@ module helmholtz_parameters
  !! Outputs:
  !!		- g       : forcing term
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine temporal_forcing(x,t,N,g)
+ subroutine temporal_forcing(x,t,N,num_freq,g)
   
   implicit none 
   
   REAL(KIND=dpp), INTENT(IN)    :: x(:)
   REAL(KIND=dpp), INTENT(IN)    :: t
   INTEGER,        INTENT(IN)    :: N
+  INTEGER,        INTENT(IN)    :: num_freq
   REAL(KIND=dpp), INTENT(INOUT) :: g
 
   !! here we choose a constant
-  g = COS(OMEGA*t)
+  if(num_freq .eq. 1) then 
+  	g = COS(OMEGA*t)
+  else
+  	g = COS(OMEGA*t) + COS(2*OMEGA*t)
+  end if
+
  end subroutine temporal_forcing
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -276,14 +283,35 @@ module helmholtz_parameters
   	END SELECT
  end subroutine enforce_bcs
 
- subroutine evolve_and_project(N,dx,end_time,freq,c,f,rho,x,v)
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ !! This subroutine takes in the current solution vector v
+ !! and solves a wave equation (assuming 0 initial vel.)
+ !! and projects it to the frequency OMEGA to solve 
+ !! Helmholtz.
+ !! Inputs:
+ !!     - N        : number of interior grid points
+ !!     - dx       : spatial step size
+ !!     - end_time : time to solve wave equation to
+ !!     - freq     : frequencies we wish to project to
+ !!     - num_freq : number of frequencies we project to
+ !! 	- c        : speed of sound in medium
+ !!		- f        : forcing term
+ !!		- rho      : density
+ !!     - x        : spatial nodes
+ !!     - v        : intial condition for wave solve
+ !! Outputs:
+ !! 	- v       : projected wave solution
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine evolve_and_project(N,dx,end_time,freq, &
+ 							   num_freq,c,f,rho,x,v)
   
   implicit none
 
   INTEGER,        INTENT(IN)    :: N
   REAL(KIND=dpp), INTENT(IN)    :: dx
   REAL(KIND=dpp), INTENT(IN)    :: end_time
-  REAL(KIND=dpp), INTENT(IN)    :: freq
+  REAL(KIND=dpp), INTENT(IN)    :: freq(:)
+  INTEGER,        INTENT(IN)    :: num_freq
   REAL(KIND=dpp), INTENT(IN)    :: c(:)
   REAL(KIND=dpp), INTENT(IN)    :: f(:)
   REAL(KIND=dpp), INTENT(IN)    :: rho(:)
@@ -308,7 +336,7 @@ module helmholtz_parameters
   CALL compute_laplacian(v,c,dx,N,utt)
 
   !! Calculate u_{tt} at t=0 
-  CALL temporal_forcing(x,t,N+2,g)
+  CALL temporal_forcing(x,t,N+2,num_freq,g)
   do i = 1,N
    utt(i) = (utt(i) - f(i)*g)/rho(i)
   end do
@@ -318,7 +346,10 @@ module helmholtz_parameters
   !! FMG: We may remove the dt*ut term 
   !! for Helmholtz solve
   ! up = v + 0.5d0*utt*dt2 - dt*ut
+  ! up = v + 0.5d0*utt*dt2 + v*(dt2*OMEGA**2.d0)**2.d0
   up = v + 0.5d0*utt*dt2
+
+  up = v
   u  = v
 
   !! March forward in time. Here we use 
@@ -330,7 +361,7 @@ module helmholtz_parameters
    t = t + dt
 
    !! compute quantities at next time level
-   CALL temporal_forcing(x,t,N+2,g)
+   CALL temporal_forcing(x,t,N+2,num_freq,g)
    CALL enforce_bcs(x,dx,N,BC,t,un)
    CALL compute_laplacian(un,c,dx,N,utt)
 
@@ -343,15 +374,23 @@ module helmholtz_parameters
    up = u
    u  = un
 
+   !! collect t = 0
    if(i .eq. 1) then 
-    v = 0.375d0*dt*v
-    v = v + dt*(COS(freq*(t))-0.25d0)*u
-   elseif(i .lt. nsteps) then  
-    v = v + dt*(COS(freq*(t))-0.25d0)*u
+    ! v = 0.375d0*dt*v*num_freq
+    v = 0.375d0*dt*v*num_freq
    end if
 
+   !! collect projection for each frequency
+   do j = 1,num_freq
+    v = v + dt*(COS(freq(j)*t)-0.25d0/num_freq)*u
+   end do
+
   end do
-  v = v + 0.5d0*dt*(COS(freq*t)-0.25d0)*u
+
+  !! do a correction for trap rule
+  do j = 1,num_freq
+    v = v - 0.5d0*dt*(COS(freq(j)*t)-0.25d0/num_freq)*u
+  end do 
   v = 2.d0*v/end_time
 
   !! Deallocate working arrays
@@ -360,5 +399,95 @@ module helmholtz_parameters
   DEALLOCATE(up)
   DEALLOCATE(utt)
  end subroutine evolve_and_project
+
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ !! This subroutine takes in an initial condition
+ !! and solves a wave equation (assuming 0 initial vel.)
+ !! Inputs:
+ !!     - N        : number of interior grid points
+ !!     - dx       : spatial step size
+ !!     - end_time : time to solve wave equation to
+ !! 	- c        : speed of sound in medium
+ !!		- f        : forcing term
+ !!		- rho      : density
+ !!     - x        : spatial nodes
+ !!     - v        : intial condition for wave solve
+ !! Outputs:
+ !! 	- v       : wave equation solution at time end_time
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine wave_solve(N,num_freq,dx,end_time,c,f,rho,x,v)
+  implicit none
+
+  INTEGER,        INTENT(IN)    :: N
+  INTEGER,        INTENT(IN)    :: num_freq
+  REAL(KIND=dpp), INTENT(IN)    :: dx
+  REAL(KIND=dpp), INTENT(IN)    :: end_time
+  REAL(KIND=dpp), INTENT(IN)    :: c(:)
+  REAL(KIND=dpp), INTENT(IN)    :: f(:)
+  REAL(KIND=dpp), INTENT(IN)    :: rho(:)
+  REAL(KIND=dpp), INTENT(IN)    :: x(:)
+  REAL(KIND=dpp), INTENT(INOUT) :: v(:)
+
+  REAL(KIND=dpp) :: t, g, dt, dt2
+  INTEGER        :: i, j, nsteps
+
+  REAL(KIND=dpp), ALLOCATABLE :: utt(:), up(:), u(:), un(:)
+
+  t        = 0.d0
+  dt       = CFL*dx
+  nsteps   = floor(end_time/dt) + 1
+  dt       = end_time/dble(nsteps)
+  dt2      = dt**2.d0
+
+  !! Allocate working arrays
+  ALLOCATE(u(N+2),utt(N+2),up(N+2),un(N+2))
+
+  !! Calculate RHS of equation at t=0
+  CALL compute_laplacian(v,c,dx,N,utt)
+
+  !! Calculate u_{tt} at t=0 
+  CALL temporal_forcing(x,t,N+2,num_freq,g)
+  do i = 1,N
+   utt(i) = (utt(i) - f(i)*g)/rho(i)
+  end do
+
+  !! Via a Taylor expansion, we note that 
+  !! u(-dt) = v - dt*ut + 0.5*dt^2*u_{tt}
+  !! FMG: We may remove the dt*ut term 
+  !! for Helmholtz solve
+  up = v + 0.5d0*utt*dt2
+  ! up = v
+  u  = v
+
+  !! March forward in time. Here we use 
+  !! a central difference in time 
+  do i = 1,nsteps
+
+   !! Solution at next time level
+   un = 2.0d0*u - up + utt*dt2
+   t = t + dt
+
+   !! compute quantities at next time level
+   CALL temporal_forcing(x,t,N+2,num_freq,g)
+   CALL enforce_bcs(x,dx,N,BC,t,un)
+   CALL compute_laplacian(un,c,dx,N,utt)
+
+   !! calculate u_{tt} at current time
+   do j = 1,N
+    utt(j) = (utt(j) - f(j)*g)/rho(j)
+   end do
+
+   !! overwrite solutions
+   up = u
+   u  = un
+  end do
+  v = u
+  !! Deallocate working arrays
+  DEALLOCATE(un)
+  DEALLOCATE(u)
+  DEALLOCATE(up)
+  DEALLOCATE(utt)
+ end subroutine wave_solve
 
 end module helmholtz_parameters
